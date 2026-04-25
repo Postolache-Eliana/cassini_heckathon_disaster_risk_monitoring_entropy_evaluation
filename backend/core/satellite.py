@@ -6,6 +6,7 @@ from backend.core.auth import get_access_token
 
 STAC_URL = "https://catalogue.dataspace.copernicus.eu/stac"
 
+
 def search_sentinel(lat, lon, start_date, end_date):
     token = get_access_token()
 
@@ -13,23 +14,49 @@ def search_sentinel(lat, lon, start_date, end_date):
         "Authorization": f"Bearer {token}"
     }
 
-    bbox = [lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01]
+    # progressively expanding search areas
+    search_steps = [0.05, 0.1, 0.2]  # ~5km, 10km, 20km
 
-    params = {
-        "collections": ["sentinel-2-l2a"],
-        "bbox": bbox,
-        "datetime": f"{start_date}/{end_date}",
-        "limit": 5
-    }
-
-    response = requests.get(
-        f"{STAC_URL}/search",
-        headers=headers,
-        params=params
+    datetime_range = (
+        f"{start_date}T00:00:00Z/"
+        f"{end_date}T23:59:59Z"
     )
 
-    response.raise_for_status()
-    return response.json().get("features", [])
+    for step in search_steps:
+        bbox = [
+            lon - step,
+            lat - step,
+            lon + step,
+            lat + step
+        ]
+
+        bbox_str = ",".join(map(str, bbox))
+
+        params = {
+            "collections": "sentinel-2-l2a",
+            "bbox": bbox_str,
+            "datetime": datetime_range,
+            "limit": 10
+        }
+
+        response = requests.get(
+            f"{STAC_URL}/search",
+            headers=headers,
+            params=params
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        features = data.get("features", [])
+
+        print(f"[STAC] bbox={step} → features={len(features)}")
+
+        if features:
+            return features
+
+    return []
+
 
 def download_preview(feature):
     token = get_access_token()
@@ -39,25 +66,44 @@ def download_preview(feature):
     }
 
     assets = feature.get("assets", {})
-    url = assets.get("visual", {}).get("href")
+
+    url = (
+        assets.get("visual", {}).get("href")
+        or assets.get("thumbnail", {}).get("href")
+        or assets.get("rendered_preview", {}).get("href")
+    )
 
     if not url:
+        print("[WARN] No usable asset found")
         return None
 
     response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print("[WARN] Download failed:", response.status_code)
+        return None
 
     img_array = np.frombuffer(response.content, np.uint8)
     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
     return img
 
+# ----------------------------
+# IMAGE → HISTOGRAM
+# ----------------------------
 def image_to_histogram(image, bins=32):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     hist, _ = np.histogram(gray.flatten(), bins=bins, range=(0, 255))
     return hist
 
+
+# ----------------------------
+# FULL PIPELINE
+# ----------------------------
 def get_satellite_histograms(lat, lon, start_date, end_date):
     features = search_sentinel(lat, lon, start_date, end_date)
+
+    print(f"[SATELLITE] total features: {len(features)}")
 
     histograms = []
 
@@ -66,7 +112,6 @@ def get_satellite_histograms(lat, lon, start_date, end_date):
         if img is None:
             continue
 
-        hist = image_to_histogram(img)
-        histograms.append(hist)
+        histograms.append(image_to_histogram(img))
 
     return histograms

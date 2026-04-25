@@ -1,7 +1,7 @@
-def compute_risk(entropy_value):
-    if entropy_value < 4:
-        return "HIGH"
-    elif entropy_value < 5:
-        return "MEDIUM"
+def classify_risk(score: float) -> str:
+    if score > 0.5:
+        return "high"
+    elif score > 0.2:
+        return "medium"
     else:
-        return "LOW"
+        return "low"
