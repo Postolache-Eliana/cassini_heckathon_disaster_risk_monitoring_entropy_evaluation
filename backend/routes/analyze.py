@@ -1,80 +1,81 @@
-from fastapi import APIRouter, UploadFile, File, Form 
-import numpy as np 
+from fastapi import APIRouter, UploadFile, File, Form
+import numpy as np
 import cv2
-import os 
-from datetime import datetime
+import datetime
 
 from backend.core.preprocessing import preprocess
-from backend.core.entropy import compute_entropy
-from backend.core.risk import compute_risk 
-from backend.state import latest_result
+from backend.core.entropy import (
+    compute_histogram,
+    build_time_matrix,
+    matrix_to_point_cloud,
+    compute_delta_cloud,
+    compute_change_score
+)
+from backend.core.satellite import get_satellite_histograms
+
 
 router = APIRouter()
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok = True)
 
-def validate_coordinates(lat, lon):
-    if not (-90 <= lat <= 90):
-        return "Invalid latitude"
-    if not (-180 <= lon <= 180):
-        return "Invalid longitude"
-    return None
+def classify_risk(score):
+    if score > 0.5:
+        return "HIGH"
+    elif score > 0.2:
+        return "MEDIUM"
+    return "LOW"
 
-def validate_timestamp(timestamp):
-    if not timestamp or len(timestamp.strip()) == 0:
-        return "Missing Timestamp"
-    return None
 
 @router.post("/analyze")
 async def analyze(
     lat: float = Form(...),
     lon: float = Form(...),
     timestamp: str = Form(...),
-    file: UploadFile = File(...)
+    image: UploadFile = File(...)
 ):
+
+    if not (-90 <= lat <= 90):
+        return {"error": "Invalid latitude"}
+
+    if not (-180 <= lon <= 180):
+        return {"error": "Invalid longitude"}
+
     try:
-        #validation
-        coord_error = validate_coordinates(lat, lon)
-        if coord_error:
-            return {"error": coord_error}
+        datetime.datetime.fromisoformat(timestamp)
+    except:
+        return {"error": "Invalid timestamp"}
 
-        time_error = validate_timestamp(timestamp)
-        if time_error:
-            return {"error": time_error}
+    contents = await image.read()
+    np_arr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-        #image decoding
-        image_bytes = await file.read()
-        np_arr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return {"error": "Invalid image"}
 
-        if img is None:
-            return {"error": "Invalid Image"}
+    processed = preprocess(img)
+    drone_hist = compute_histogram(processed)
 
-        #saving image
-        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        filepath = os.path.join(UPLOAD_DIR, filename)
+    sat_histograms = get_satellite_histograms(
+        lat,
+        lon,
+        "2024-01-01",
+        "2024-01-05"
+    )
 
-        #processing image
-        processed = preprocess(img)
-        entropy_val = compute_entropy(processed)
-        risk = compute_risk(entropy_val)
+    # fallback safety
+    if len(sat_histograms) == 0:
+        sat_histograms = [drone_hist]
 
-        result = {
-            "lat": lat,
-            "lon": lon,
-            "timestamp": timestamp,
-            "entropy": float(entropy_val),
-            "risk": risk,
-            "file": filename
-        }
+    all_histograms = sat_histograms + [drone_hist]
 
-        #save state
-        latest_result.clear()
-        latest_result.update(result)
+    matrix = build_time_matrix(all_histograms)
+    points = matrix_to_point_cloud(matrix)
+    delta_cloud = compute_delta_cloud(points)
+    score = compute_change_score(delta_cloud)
 
-        return result
-
-    except Exception as e:
-        return {"error": str(e)}
-
+    return {
+        "lat": lat,
+        "lon": lon,
+        "frames_used": len(all_histograms),
+        "change_score": float(score),
+        "risk": classify_risk(score)
+    }
