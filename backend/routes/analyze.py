@@ -4,10 +4,10 @@ import cv2
 import os 
 from datetime import datetime
 
-from core.preprocessing import preprocess
-from core.entropy import compute_entropy
-from core.risk import compute_risk 
-from state import latest_result
+from backend.core.preprocessing import preprocess
+from backend.core.entropy import compute_entropy
+from backend.core.risk import compute_risk 
+from backend.state import latest_result
 
 router = APIRouter()
 
@@ -45,4 +45,36 @@ async def analyze(
 
         #image decoding
         image_bytes = await file.read()
-        np_arr
+        np_arr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            return {"error": "Invalid Image"}
+
+        #saving image
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+
+        #processing image
+        processed = preprocess(img)
+        entropy_val = compute_entropy(processed)
+        risk = compute_risk(entropy_val)
+
+        result = {
+            "lat": lat,
+            "lon": lon,
+            "timestamp": timestamp,
+            "entropy": float(entropy_val),
+            "risk": risk,
+            "file": filename
+        }
+
+        #save state
+        latest_result.clear()
+        latest_result.update(result)
+
+        return result
+
+    except Exception as e:
+        return {"error": str(e)}
+
