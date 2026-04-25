@@ -26,12 +26,18 @@ def validate_timestamp(timestamp):
         return "Missing Timestamp"
     return None
 
-@router.post("/analyze")
+@router.post(
+    "/analyze",
+    summary="Analyze drone image",
+    description="Uploads a drone image with GPS metadata, preprocesses it, computes Shannon entropy, and returns a disaster risk level."
+)
 async def analyze(
-    lat: float = Form(...),
-    lon: float = Form(...),
-    timestamp: str = Form(...),
-    file: UploadFile = File(...)
+    lat: float = Form(..., description="Latitude of the drone capture point. Must be between -90 and 90.", examples=[44.4268]),
+    lon: float = Form(..., description="Longitude of the drone capture point. Must be between -180 and 180.", examples=[26.1025]),
+    timestamp: str = Form(..., description="Capture timestamp in ISO format.", examples=["2026-04-25T14:30:00Z"]),
+    file: UploadFile = File(..., description="Drone image captured by the ESP32CAM module.")
+    #device_id: str = Form("drone_01")
+    #alt: float = Form(0)
 ):
     try:
         #validation
