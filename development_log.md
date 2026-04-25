@@ -4,6 +4,19 @@ This document tracks the evolution of the Cassini photogrammetry rig using Seman
 
 ---
 
+## [1.0.0] - Raspberry Pi Coordinator Architecture
+
+### Added
+- `pi_coordinator.py`: Initial Python coordinator script for the Raspberry Pi Zero W.
+  - Utilizes hardware UART (`/dev/serial0`) for stable 115200 baud communication.
+  - Incorporates `RPi.GPIO` to manage the hardware trigger.
+  - Implements a robust `readline()` parsing sequence to safely separate the custom text-based headers from the raw binary image data stream.
+
+### Deprecated
+- `esp8266_controller.ino` (Architecture pivoted to Raspberry Pi due to computational and serial buffer limitations).
+
+---
+
 ## [0.3.0] - ESP8266 Controller Integration
 
 ### Added
