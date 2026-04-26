@@ -1,9 +1,7 @@
 import os
 import numpy as np
 import openeo
-import rasterio
 from datetime import datetime, timedelta
-from pathlib import Path
 
 
 # =================================================
@@ -16,7 +14,7 @@ CDSE_CLIENT_SECRET = os.getenv("CDSE_CLIENT_SECRET")
 
 
 # =================================================
-# CONNECTION (FIXED PROVIDER)
+# CONNECTION
 # =================================================
 def get_connection():
     conn = openeo.connect(OPENEO_URL)
@@ -35,6 +33,7 @@ def get_connection():
 # =================================================
 def build_window(timestamp: str):
     base = datetime.fromisoformat(timestamp.replace("Z", ""))
+
     start = base
     end = base + timedelta(days=5)
 
@@ -42,12 +41,16 @@ def build_window(timestamp: str):
 
 
 # =================================================
-# SAFE NDVI ENGINE
+# MAIN NDVI ENGINE (FIXED)
 # =================================================
 def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
 
     try:
         start, end = build_window(timestamp)
+
+        print("[OPENEO WINDOW]", start, "→", end)
+
+        conn = get_connection()
 
         bbox = {
             "west": lon - 0.05,
@@ -55,10 +58,6 @@ def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
             "east": lon + 0.05,
             "north": lat + 0.05
         }
-
-        print("[OPENEO WINDOW]", start, "→", end)
-
-        conn = get_connection()
 
         # =================================================
         # LOAD SENTINEL-2 L2A
@@ -71,59 +70,40 @@ def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
         )
 
         # =================================================
-        # NDVI
+        # NDVI (CORRECT OPENEO WAY)
         # =================================================
-        ndvi = (cube.band("B08") - cube.band("B04")) / (
-            cube.band("B08") + cube.band("B04")
-        )
+        ndvi = cube.ndvi(red="B04", nir="B08")
 
+        # temporal aggregation (safe)
         ndvi = ndvi.mean_time()
 
         # =================================================
-        # EXECUTE JOB
+        # EXECUTE
         # =================================================
         job = ndvi.execute_batch()
-        results = job.get_results()
 
-        files = results.download_files()
+        result = job.get_results()
 
-        if not files:
-            print("[NO OUTPUT FILES]")
+        # safer extraction: take first available array
+        try:
+            array = result.xarray()
+
+            values = array.values.flatten()
+            values = values[~np.isnan(values)]
+
+            if len(values) == 0:
+                print("[EMPTY NDVI ARRAY]")
+                return []
+
+            mean_ndvi = float(np.mean(values))
+
+            print("[NDVI RESULT]", mean_ndvi)
+
+            return [mean_ndvi]
+
+        except Exception as e:
+            print("[RESULT PARSE ERROR]", str(e))
             return []
-
-        values = []
-
-        # =================================================
-        # SAFE FILE HANDLING (FIXES PosixPath ERROR)
-        # =================================================
-        for f in files:
-            p = Path(f)
-
-            if p.suffix.lower() not in [".tif", ".tiff"]:
-                continue
-
-            try:
-                with rasterio.open(str(p)) as src:
-                    arr = src.read(1).astype(float)
-
-                    arr = arr[~np.isnan(arr)]
-
-                    if len(arr) > 0:
-                        values.append(float(np.mean(arr)))
-
-            except Exception as e:
-                print("[FILE READ ERROR]", e)
-                continue
-
-        if not values:
-            print("[NO VALID NDVI VALUES]")
-            return []
-
-        mean_ndvi = float(np.mean(values))
-
-        print("[NDVI RESULT]", mean_ndvi)
-
-        return [mean_ndvi]
 
     except Exception as e:
         print("[SATELLITE ERROR]", str(e))
@@ -131,25 +111,24 @@ def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
 
 
 # =================================================
-# SCORING
+# SCORING MODEL
 # =================================================
 def compute_satellite_score(series):
 
-    try:
-        arr = np.array(series, dtype=float)
+    arr = np.array(series, dtype=float)
 
-        if len(arr) == 0:
-            return 0.0, []
-
-        score = abs(0.5 - float(np.mean(arr)))
-
-        return float(score), arr.tolist()
-
-    except Exception:
+    if len(arr) == 0:
         return 0.0, []
+
+    baseline = np.mean(arr)
+    current = arr[-1]
+
+    score = abs(current - baseline)
+
+    return float(score), arr.tolist()
 
 
 # =================================================
-# FASTAPI COMPATIBILITY
+# ALIAS FOR BACKWARD COMPATIBILITY
 # =================================================
 get_satellite_data_series = get_satellite_ndvi_series
