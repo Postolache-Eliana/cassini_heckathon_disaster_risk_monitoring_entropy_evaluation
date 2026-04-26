@@ -35,6 +35,7 @@ async def analyze(
     mode: Mode = Form(...),
     image: Optional[UploadFile] = File(None)
 ):
+
     # ------------------------
     # VALIDATION
     # ------------------------
@@ -49,7 +50,7 @@ async def analyze(
     windows = build_time_range_series(timestamp)
 
     # ------------------------
-    # DATA
+    # DATA ACQUISITION
     # ------------------------
     if mode == Mode.satellite:
         histograms = get_satellite_histograms(lat, lon, windows)
@@ -86,20 +87,24 @@ async def analyze(
         return {"error": "Invalid mode"}
 
     # ------------------------
-    # HARD SAFETY CHECK (NOW SAFE)
+    # ENSURE ENOUGH DATA
     # ------------------------
-    if len(histograms) < 3:
-        histograms = [(np.ones(32) * 0.1).tolist() for _ in range(6)]
+    if len(histograms) < 4:
+        return {
+            "error": "Insufficient satellite data",
+            "frames": len(histograms)
+        }
 
     # ------------------------
-    # SPLIT
+    # IMPORTANT FIX: asymmetric split
     # ------------------------
-    split = len(histograms) // 2
+    split = max(2, int(len(histograms) * 0.7))
+
     baseline_hist = histograms[:split]
     current_hist = histograms[split:]
 
     # ------------------------
-    # ENTROPY
+    # ENTROPY PIPELINE
     # ------------------------
     matrix_b = build_time_matrix(baseline_hist)
     points_b = matrix_to_point_cloud(matrix_b)
@@ -110,6 +115,9 @@ async def analyze(
     points_c = matrix_to_point_cloud(matrix_c)
     delta_c = compute_delta_cloud(points_c)
     current_score = compute_change_score(delta_c)
+
+    print("BASELINE RAW SAMPLE:", np.array(baseline_hist)[:2])
+    print("CURRENT RAW SAMPLE:", np.array(current_hist)[:2])
 
     relative_score = current_score - baseline_score
     risk = classify_risk(relative_score)
@@ -127,9 +135,9 @@ async def analyze(
         "mode": mode,
         "frames": len(histograms),
 
-        "baseline_score": round(baseline_score, 4),
-        "current_score": round(current_score, 4),
-        "relative_score": round(relative_score, 4),
+        "baseline_score": round(baseline_score, 6),
+        "current_score": round(current_score, 6),
+        "relative_score": round(relative_score, 6),
 
         "risk": risk,
 

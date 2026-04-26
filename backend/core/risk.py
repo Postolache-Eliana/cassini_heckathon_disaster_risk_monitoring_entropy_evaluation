@@ -1,10 +1,20 @@
-def classify_risk(relative_score: float) -> str:
+def classify_risk(relative_score: float):
     """
-    Classify risk based on deviation from baseline.
+    FIXED RISK CLASSIFICATION
+
+    Now calibrated for REAL entropy-scale outputs (not normalized 0–1).
     """
-    if relative_score > 0.2:
-        return "high"
-    elif relative_score > 0.05:
-        return "medium"
-    else:
+
+    abs_score = abs(relative_score)
+
+    # low change
+    if abs_score < 2:
         return "low"
+
+    # moderate change
+    elif abs_score < 6:
+        return "medium"
+
+    # strong change (flood/drought signal candidate)
+    else:
+        return "high"
