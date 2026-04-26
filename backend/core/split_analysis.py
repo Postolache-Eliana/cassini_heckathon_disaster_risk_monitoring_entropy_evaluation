@@ -1,3 +1,5 @@
+#TO DELETE
+
 def compute_baseline_and_current(histograms, split_ratio=0.5):
     """
     Split histograms into baseline and current windows.

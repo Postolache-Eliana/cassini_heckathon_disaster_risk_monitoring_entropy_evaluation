@@ -1,3 +1,5 @@
+# TO DELETE
+
 def compute_hybrid_score(satellite_score, camera_entropy_change):
     """
     Simple fusion model for demo.

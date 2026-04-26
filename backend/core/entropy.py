@@ -53,7 +53,7 @@ def matrix_to_point_cloud(matrix):
         anomaly_map = detect_anomaly_map(matrix[t])
         clusters = cluster_anomalies(anomaly_map)
 
-        # 🔥 cluster-level representation (not raw bins anymore)
+        # cluster-level representation (not raw bins anymore)
         cluster_strength = [np.mean(c) for c in clusters] if clusters else [0.0]
 
         for c in cluster_strength:
@@ -79,7 +79,7 @@ def compute_change_score(delta_cloud):
 
     magnitudes = np.linalg.norm(arr, axis=1)
 
-    # 🔥 event-based scoring (clusters, not bins)
+    # event-based scoring (clusters)
     mean = np.mean(magnitudes)
     peak = np.max(magnitudes)
 

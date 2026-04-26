@@ -33,10 +33,7 @@ def classify_environment(histograms, relative_score):
     # Variability over time
     temporal_var = np.std(matrix)
 
-    # ------------------------
     # RULE-BASED CLASSIFICATION
-    # ------------------------
-
     if low_region > high_region * 1.2 and relative_score > 0.05:
         return {
             "environment": "flood-like conditions",

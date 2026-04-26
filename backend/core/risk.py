@@ -7,14 +7,11 @@ def classify_risk(ndvi_series):
     trend = np.polyfit(range(len(ndvi)), ndvi, 1)[0]
     variance = np.var(ndvi)
 
-    # -----------------------------
     # EVENT DETECTION RULES
-    # -----------------------------
-
     strong_trend = abs(trend) > 0.05
     unstable = variance > 0.01
 
-    # flood/drought indicator = sustained movement, not noise
+    # flood/drought indicator
     if strong_trend and mean < 0.1:
         return "high"
 

@@ -1,3 +1,5 @@
+# TO DELETE
+
 def interpret_results(baseline, current, relative, risk):
 
     direction = "stable"

@@ -4,7 +4,7 @@ import numpy as np
 
 def image_entropy(image):
     """
-    Proper Shannon entropy for grayscale image.
+    Shannon entropy for grayscale image.
     """
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

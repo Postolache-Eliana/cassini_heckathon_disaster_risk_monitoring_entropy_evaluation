@@ -1,9 +1,6 @@
 import numpy as np
 
-
-# =================================================
 # NORMALIZATION HELPERS
-# =================================================
 def normalize(x, min_val, max_val):
 
     if max_val - min_val == 0:
@@ -12,9 +9,7 @@ def normalize(x, min_val, max_val):
     return (x - min_val) / (max_val - min_val)
 
 
-# =================================================
 # SATELLITE SCORE (KEEP SIMPLE)
-# =================================================
 def satellite_score(ndvi_series):
 
     if not ndvi_series:
@@ -25,9 +20,7 @@ def satellite_score(ndvi_series):
     return float(abs(np.mean(arr) - arr[-1]))
 
 
-# =================================================
 # CAMERA SCORE (ENTROPY-BASED)
-# =================================================
 def camera_score(camera_features):
 
     entropy = camera_features.get("entropy", 0.0)
@@ -39,9 +32,7 @@ def camera_score(camera_features):
     return float(0.6 * entropy_n + 0.4 * edges_n)
 
 
-# =================================================
-# FINAL FUSION MODEL (CORE OF SYSTEM)
-# =================================================
+# FUSION MODEL (CORE OF SYSTEM)
 def fused_score(ndvi_series, camera_features):
 
     sat = satellite_score(ndvi_series)

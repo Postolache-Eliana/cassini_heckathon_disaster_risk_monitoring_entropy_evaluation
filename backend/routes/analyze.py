@@ -8,26 +8,18 @@ from backend.core.fusion import fused_score
 
 router = APIRouter()
 
-
-# =================================================
 # REQUEST MODEL
-# =================================================
 class AnalyzeRequest(BaseModel):
     lat: float
     lon: float
     timestamp: str
     image_path: Optional[str] = None
 
-
-# =================================================
 # MAIN ENDPOINT
-# =================================================
 @router.post("/analyze")
 async def analyze(payload: AnalyzeRequest):
 
-    # -----------------------------
     # 1. SATELLITE NDVI PIPELINE
-    # -----------------------------
     ndvi_series = get_satellite_data_series(
         payload.lat,
         payload.lon,
@@ -37,9 +29,7 @@ async def analyze(payload: AnalyzeRequest):
     if ndvi_series is None:
         ndvi_series = []
 
-    # -----------------------------
-    # 2. CAMERA PIPELINE (OPTIONAL)
-    # -----------------------------
+    # 2. CAMERA PIPELINE
     camera_features = {
         "entropy": 0.0,
         "edge_density": 0.0
@@ -48,14 +38,10 @@ async def analyze(payload: AnalyzeRequest):
     if payload.image_path:
         camera_features = analyze_frame(payload.image_path)
 
-    # -----------------------------
     # 3. FUSION MODEL
-    # -----------------------------
     result = fused_score(ndvi_series, camera_features)
 
-    # -----------------------------
     # 4. RESPONSE FORMAT
-    # -----------------------------
     return {
         "mode": "fusion",
         "frames": len(ndvi_series),

@@ -4,18 +4,14 @@ import openeo
 from datetime import datetime, timedelta
 
 
-# =================================================
 # CONFIG
-# =================================================
 OPENEO_URL = "https://openeo.dataspace.copernicus.eu"
 
 CDSE_CLIENT_ID = os.getenv("CDSE_CLIENT_ID")
 CDSE_CLIENT_SECRET = os.getenv("CDSE_CLIENT_SECRET")
 
 
-# =================================================
 # CONNECTION
-# =================================================
 def get_connection():
     conn = openeo.connect(OPENEO_URL)
 
@@ -28,9 +24,7 @@ def get_connection():
     return conn
 
 
-# =================================================
 # TIME WINDOW
-# =================================================
 def build_window(timestamp: str):
     base = datetime.fromisoformat(timestamp.replace("Z", ""))
 
@@ -40,9 +34,7 @@ def build_window(timestamp: str):
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-# =================================================
-# MAIN NDVI ENGINE (FIXED)
-# =================================================
+# MAIN NDVI ENGINE 
 def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
 
     try:
@@ -59,9 +51,7 @@ def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
             "north": lat + 0.05
         }
 
-        # =================================================
         # LOAD SENTINEL-2 L2A
-        # =================================================
         cube = conn.load_collection(
             "SENTINEL2_L2A",
             spatial_extent=bbox,
@@ -69,17 +59,13 @@ def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
             bands=["B04", "B08"]
         )
 
-        # =================================================
-        # NDVI (CORRECT OPENEO WAY)
-        # =================================================
+        # NDVI
         ndvi = cube.ndvi(red="B04", nir="B08")
 
         # temporal aggregation (safe)
         ndvi = ndvi.mean_time()
 
-        # =================================================
         # EXECUTE
-        # =================================================
         job = ndvi.execute_batch()
 
         result = job.get_results()
@@ -109,10 +95,7 @@ def get_satellite_ndvi_series(lat: float, lon: float, timestamp: str):
         print("[SATELLITE ERROR]", str(e))
         return []
 
-
-# =================================================
 # SCORING MODEL
-# =================================================
 def compute_satellite_score(series):
 
     arr = np.array(series, dtype=float)
@@ -128,7 +111,5 @@ def compute_satellite_score(series):
     return float(score), arr.tolist()
 
 
-# =================================================
-# ALIAS FOR BACKWARD COMPATIBILITY
-# =================================================
+# ALIAS FOR BACKWARD COMPATIBILITY (DO NOT DELETE, WILL NOT WORK WITHOUT THIS FOR SOME REASON)
 get_satellite_data_series = get_satellite_ndvi_series

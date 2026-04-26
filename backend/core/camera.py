@@ -1,10 +1,7 @@
 import cv2
 import numpy as np
 
-
-# =================================================
 # IMAGE ENTROPY (CORE SIGNAL)
-# =================================================
 def image_entropy(image: np.ndarray) -> float:
     """
     Shannon entropy of grayscale image.
@@ -28,9 +25,7 @@ def image_entropy(image: np.ndarray) -> float:
     return float(-np.sum(prob * np.log2(prob)))
 
 
-# =================================================
 # EDGE DENSITY (STRUCTURE SIGNAL)
-# =================================================
 def edge_density(image: np.ndarray) -> float:
 
     if image is None:
@@ -41,10 +36,7 @@ def edge_density(image: np.ndarray) -> float:
 
     return float(np.mean(edges > 0))
 
-
-# =================================================
 # MAIN CAMERA ANALYZER
-# =================================================
 def analyze_frame(image_path: str):
 
     img = cv2.imread(image_path)
