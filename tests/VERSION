@@ -1,0 +1,18 @@
+# Test Suite Version Control
+
+Current Suite Version: 1.1.0
+
+## File Versions
+- `test_hardware.py`: v1.1.0
+- `test_gpu.py`: v1.0.0
+
+---
+
+## [1.1.0]
+- **Added:** `test_gpu.py` to test VideoCore IV GPU headless EGL context initialization and GLSL shader compilation.
+- **Added:** JPEG image data integrity test to `test_hardware.py`. Verifies that the full hardware UART payload contains the correct `FF D8 FF` JPEG magic bytes.
+
+## [1.0.0]
+- **Added:** Initial Hardware-in-the-Loop (HIL) test suite in `test_hardware.py`.
+- **Added:** `test_hardware_trigger_and_gps_spi_response` to physically assert that the TTGO T-Beam returns a valid 16-byte GNSS payload over SPI upon hardware trigger.
+- **Added:** `test_hardware_uart_image_header_response` to assert that the ESP32-CAM successfully captures and responds with the custom `<<IMAGE_START>>` header over UART.
