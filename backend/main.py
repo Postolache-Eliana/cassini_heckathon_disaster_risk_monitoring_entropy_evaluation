@@ -2,7 +2,11 @@ from fastapi import FastAPI
 from backend.routes.analyze import router as analyze_router
 from backend.state import latest_result
 
-app = FastAPI()
+app = FastAPI(
+    title="Disaster Risk Monitoring API",
+    description="Drone and satellite-assisted disaster risk monitoring API using entropy-based image analysis.",
+    version="1.0.0"
+)
 
 app.include_router(analyze_router)
 
