@@ -1,20 +1,24 @@
-def classify_risk(relative_score: float):
-    """
-    FIXED RISK CLASSIFICATION
+def classify_risk(ndvi_series):
+    import numpy as np
 
-    Now calibrated for REAL entropy-scale outputs (not normalized 0–1).
-    """
+    ndvi = np.array(ndvi_series)
 
-    abs_score = abs(relative_score)
+    mean = np.mean(ndvi)
+    trend = np.polyfit(range(len(ndvi)), ndvi, 1)[0]
+    variance = np.var(ndvi)
 
-    # low change
-    if abs_score < 2:
-        return "low"
+    # -----------------------------
+    # EVENT DETECTION RULES
+    # -----------------------------
 
-    # moderate change
-    elif abs_score < 6:
+    strong_trend = abs(trend) > 0.05
+    unstable = variance > 0.01
+
+    # flood/drought indicator = sustained movement, not noise
+    if strong_trend and mean < 0.1:
+        return "high"
+
+    if unstable and abs(trend) < 0.03:
         return "medium"
 
-    # strong change (flood/drought signal candidate)
-    else:
-        return "high"
+    return "low"

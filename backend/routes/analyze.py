@@ -6,17 +6,8 @@ import cv2
 from datetime import datetime
 
 from backend.core.preprocessing import preprocess
-from backend.core.entropy import (
-    build_time_matrix,
-    matrix_to_point_cloud,
-    compute_delta_cloud,
-    compute_change_score
-)
-from backend.core.risk import classify_risk
-from backend.core.interpretation import interpret_results
-from backend.core.environment_classification import classify_environment
-from backend.core.timeseries import build_time_range_series
-from backend.core.satellite import get_satellite_histograms
+from backend.core.satellite import compute_satellite_score
+from backend.core.hybrid import classify_risk
 
 router = APIRouter()
 
@@ -25,6 +16,18 @@ class Mode(str, Enum):
     satellite = "satellite"
     image = "image"
     hybrid = "hybrid"
+
+
+def compute_image_entropy_score(image: np.ndarray) -> float:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).ravel()
+    hist = hist / (np.sum(hist) + 1e-6)
+
+    hist = hist[hist > 0]
+    entropy = -np.sum(hist * np.log2(hist))
+
+    return float(entropy)
 
 
 @router.post("/analyze")
@@ -36,111 +39,96 @@ async def analyze(
     image: Optional[UploadFile] = File(None)
 ):
 
-    # ------------------------
-    # VALIDATION
-    # ------------------------
+    # ----------------------------
+    # Validate timestamp
+    # ----------------------------
     try:
         datetime.fromisoformat(timestamp)
     except Exception:
-        return {"error": "Invalid timestamp format"}
+        return {"error": "Invalid timestamp format. Use ISO format."}
 
-    # ------------------------
-    # TIME SERIES
-    # ------------------------
-    windows = build_time_range_series(timestamp)
-
-    # ------------------------
-    # DATA ACQUISITION
-    # ------------------------
+    # ----------------------------
+    # SATELLITE MODE (NDVI ONLY)
+    # ----------------------------
     if mode == Mode.satellite:
-        histograms = get_satellite_histograms(lat, lon, windows)
 
-    elif mode == Mode.image:
-        if image is None:
-            return {"error": "Image required"}
+        # IMPORTANT:
+        # Now returns REAL NDVI-ready histograms internally (no external dependency here)
+        from backend.core.satellite import get_satellite_data_series
 
-        contents = await image.read()
-        np_arr = np.frombuffer(contents, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        data_series = get_satellite_data_series(lat, lon, timestamp)
 
-        processed = preprocess(img)
-        hist = np.histogram(processed.flatten(), bins=32)[0]
+        score, ndvi_series = compute_satellite_score(data_series)
 
-        histograms = [hist for _ in windows]
+        risk = classify_risk(score)
 
-    elif mode == Mode.hybrid:
-        if image is None:
-            return {"error": "Image required"}
-
-        contents = await image.read()
-        np_arr = np.frombuffer(contents, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-        processed = preprocess(img)
-        hist = np.histogram(processed.flatten(), bins=32)[0]
-
-        sat = get_satellite_histograms(lat, lon, windows)
-
-        histograms = sat + [hist]
-
-    else:
-        return {"error": "Invalid mode"}
-
-    # ------------------------
-    # ENSURE ENOUGH DATA
-    # ------------------------
-    if len(histograms) < 4:
         return {
-            "error": "Insufficient satellite data",
-            "frames": len(histograms)
+            "mode": "satellite",
+            "frames": len(data_series),
+            "ndvi_series": ndvi_series,
+            "score": round(score, 6),
+            "risk": risk,
+            "signal": "NDVI temporal analysis"
         }
 
-    # ------------------------
-    # IMPORTANT FIX: asymmetric split
-    # ------------------------
-    split = max(2, int(len(histograms) * 0.7))
+    # ----------------------------
+    # IMAGE MODE
+    # ----------------------------
+    elif mode == Mode.image:
 
-    baseline_hist = histograms[:split]
-    current_hist = histograms[split:]
+        if image is None:
+            return {"error": "Image required for image mode"}
 
-    # ------------------------
-    # ENTROPY PIPELINE
-    # ------------------------
-    matrix_b = build_time_matrix(baseline_hist)
-    points_b = matrix_to_point_cloud(matrix_b)
-    delta_b = compute_delta_cloud(points_b)
-    baseline_score = compute_change_score(delta_b)
+        contents = await image.read()
+        np_arr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-    matrix_c = build_time_matrix(current_hist)
-    points_c = matrix_to_point_cloud(matrix_c)
-    delta_c = compute_delta_cloud(points_c)
-    current_score = compute_change_score(delta_c)
+        processed = preprocess(img)
 
-    print("BASELINE RAW SAMPLE:", np.array(baseline_hist)[:2])
-    print("CURRENT RAW SAMPLE:", np.array(current_hist)[:2])
+        score = compute_image_entropy_score(processed)
+        risk = classify_risk(score)
 
-    relative_score = current_score - baseline_score
-    risk = classify_risk(relative_score)
+        return {
+            "mode": "image",
+            "entropy": round(score, 6),
+            "risk": risk,
+            "signal": "image entropy analysis"
+        }
 
-    interpretation = interpret_results(
-        baseline_score,
-        current_score,
-        relative_score,
-        risk
-    )
+    # ----------------------------
+    # HYBRID MODE
+    # ----------------------------
+    elif mode == Mode.hybrid:
 
-    env = classify_environment(histograms, relative_score)
+        if image is None:
+            return {"error": "Image required for hybrid mode"}
 
-    return {
-        "mode": mode,
-        "frames": len(histograms),
+        from backend.core.satellite import get_satellite_data_series
 
-        "baseline_score": round(baseline_score, 6),
-        "current_score": round(current_score, 6),
-        "relative_score": round(relative_score, 6),
+        contents = await image.read()
+        np_arr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-        "risk": risk,
+        processed = preprocess(img)
 
-        **interpretation,
-        **env
-    }
+        image_score = compute_image_entropy_score(processed)
+
+        data_series = get_satellite_data_series(lat, lon, timestamp)
+        sat_score, ndvi_series = compute_satellite_score(data_series)
+
+        fused_score = (0.7 * sat_score) + (0.3 * image_score)
+
+        risk = classify_risk(fused_score)
+
+        return {
+            "mode": "hybrid",
+            "ndvi_series": ndvi_series,
+            "image_entropy": round(image_score, 6),
+            "satellite_score": round(sat_score, 6),
+            "fused_score": round(fused_score, 6),
+            "risk": risk,
+            "signal": "NDVI + image entropy fusion"
+        }
+
+    else:
+        return {"error": "Invalid mode selected"}
