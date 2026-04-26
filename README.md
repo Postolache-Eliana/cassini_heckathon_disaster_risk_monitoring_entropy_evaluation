@@ -1,4 +1,4 @@
-# 🌍 Satellite NDVI Intelligence Module
+# Satellite NDVI Intelligence Module
 
 This module is part of a geospatial environmental monitoring system that performs **real-time vegetation analysis using Sentinel-2 satellite data via Copernicus Data Space Ecosystem (CDSE) and OpenEO**.
 
@@ -6,9 +6,9 @@ It currently implements a fully working **NDVI time-series extraction + anomaly 
 
 ---
 
-# 📌 Features
+# Features
 
-## 🛰 Satellite Data Pipeline
+## Satellite Data Pipeline
 - Fetches Sentinel-2 L2A imagery via OpenEO (CDSE backend)
 - Extracts spectral bands:
   - B04 (Red)
@@ -22,7 +22,7 @@ It currently implements a fully working **NDVI time-series extraction + anomaly 
 
 ---
 
-## 📊 Time-Series Analysis
+## Time-Series Analysis
 - Generates NDVI history over configurable time windows
 - Computes:
   - baseline NDVI (historical mean)
@@ -31,7 +31,7 @@ It currently implements a fully working **NDVI time-series extraction + anomaly 
 
 ---
 
-## ⚠️ Risk Scoring Model
+## Risk Scoring Model
 A lightweight anomaly detector:
 
 - NDVI drop → drought-like signal
